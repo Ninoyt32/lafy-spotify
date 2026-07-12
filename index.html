@@ -86,55 +86,47 @@
       statusEl.textContent = msg;
     }
 
-    function parseHash(hash) {
+    function parseQuery(search) {
       const params = {};
-      hash.replace(/^#/, '').split('&').forEach(part => {
+      search.replace(/^\?/, '').split('&').forEach(part => {
         const [k, v] = part.split('=');
-        if (k) params[decodeURIComponent(k)] = decodeURIComponent(v || '');
+        if (k) params[decodeURIComponent(k)] = decodeURIComponent((v || '').replace(/\+/g, ' '));
       });
       return params;
     }
 
     (function() {
-      const hash = window.location.hash;
-      if (!hash || !hash.includes('access_token')) {
-        setStatus('error', '✗ Token não encontrado');
-        hintEl.textContent = 'Acesse esta página pelo link gerado no jogo.';
+      // Authorization Code Flow — o code vem como query param ?code=XXX
+      const params = parseQuery(window.location.search);
+      const code = params['code'];
+      const error = params['error'];
+
+      if (error) {
+        setStatus('error', '✗ Login cancelado ou erro: ' + error);
+        hintEl.textContent = 'Feche esta aba e tente novamente no jogo.';
         return;
       }
 
-      const params = parseHash(hash);
-      const token = params['access_token'];
-      const expiresIn = params['expires_in'] || 3600;
-
-      if (!token) {
-        setStatus('error', '✗ Falha na autenticação');
-        hintEl.textContent = 'Tente novamente dentro do jogo.';
+      if (!code) {
+        setStatus('error', '✗ Código não encontrado');
+        hintEl.textContent = 'Acesse esta página pelo link gerado no jogo com /importspotify';
         return;
       }
 
-      setStatus('loading', '⏳ Enviando para o jogo...');
+      setStatus('success', '✓ Login realizado com sucesso!');
 
-      // Tenta passar o token de volta via window.opener (se foi aberto pelo jogo via NUI)
-      if (window.opener && !window.opener.closed) {
-        try {
-          window.opener.postMessage({ type: 'SPOTIFY_TOKEN', access_token: token, expires_in: expiresIn }, '*');
-          setStatus('success', '✓ Conectado com sucesso!');
-          hintEl.textContent = 'Pode fechar esta aba e voltar ao jogo.';
-          tokenBoxEl.style.display = 'none';
-          setTimeout(() => window.close(), 2000);
-          return;
-        } catch(e) {}
-      }
-
-      // Fallback: exibe o token para o jogador copiar manualmente no chat do jogo
-      setStatus('success', '✓ Login realizado!');
+      // Exibe o code para o jogador copiar
       tokenBoxEl.style.display = 'block';
-      tokenBoxEl.textContent = token;
-      hintEl.textContent = 'Copie o código acima e cole no chat do jogo com: /spotify ' + token.substring(0, 20) + '...';
+      tokenBoxEl.textContent = code;
 
-      // Salva no localStorage como fallback
-      try { localStorage.setItem('lafy_spotify_token', token); } catch(e) {}
+      hintEl.innerHTML = '📋 Copie o código acima e cole no chat do jogo:<br><strong>/importspotify ' + code.substring(0, 15) + '...</strong>';
+
+      // Tenta copiar automaticamente
+      try {
+        navigator.clipboard.writeText(code).then(() => {
+          hintEl.innerHTML = '✓ Código copiado! Cole no chat do jogo:<br><strong>/importspotify [CTRL+V]</strong>';
+        }).catch(() => {});
+      } catch(e) {}
     })();
   </script>
 </body>
